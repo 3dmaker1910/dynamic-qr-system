@@ -1,0 +1,256 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dynamic QR Code Manager</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+    <style>
+        .fade-in { animation: fadeIn .3s ease-in; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(-8px); } to { opacity: 1; transform: translateY(0); } }
+    </style>
+</head>
+<body class="bg-gray-50 min-h-screen">
+
+    <!-- Header -->
+    <header class="bg-white border-b border-gray-200 shadow-sm">
+        <div class="max-w-6xl mx-auto px-4 py-5 flex items-center justify-between">
+            <div class="flex items-center gap-3">
+                <div class="bg-indigo-600 text-white p-2.5 rounded-lg">
+                    <i class="fa-solid fa-qrcode text-xl"></i>
+                </div>
+                <div>
+                    <h1 class="text-xl font-bold text-gray-900">QR Code Manager</h1>
+                    <p class="text-sm text-gray-500">Create &amp; manage dynamic QR codes</p>
+                </div>
+            </div>
+            <span id="stats-badge" class="bg-indigo-50 text-indigo-700 text-sm font-medium px-3 py-1.5 rounded-full">
+                Loading...
+            </span>
+        </div>
+    </header>
+
+    <main class="max-w-6xl mx-auto px-4 py-8 space-y-8">
+
+        <!-- Create Form -->
+        <section class="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+            <h2 class="text-lg font-semibold text-gray-800 mb-4">
+                <i class="fa-solid fa-plus-circle text-indigo-500 mr-2"></i>Create New QR Code
+            </h2>
+            <form id="create-form" class="flex flex-col sm:flex-row gap-3">
+                <input id="slug-input" type="text" placeholder="slug (e.g. promo-2026)"
+                    class="flex-1 border border-gray-300 rounded-lg px-4 py-2.5 text-sm focus:ring-2 focus:ring-indigo-500 focus:border-transparent outline-none"
+                    pattern="[a-zA-Z0-9_-]+" required>
+                <input id="url-input" type="url" placeholder="https://destination-url.com"
+                    class="flex-[2] border border-gray-300 rounded-lg px-4 py-2.5 text-sm focus:ring-2 focus:ring-indigo-500 focus:border-transparent outline-none"
+                    required>
+                <button type="submit"
+                    class="bg-indigo-600 hover:bg-indigo-700 text-white font-medium px-6 py-2.5 rounded-lg text-sm transition-colors whitespace-nowrap">
+                    <i class="fa-solid fa-plus mr-1"></i> Create
+                </button>
+            </form>
+            <div id="form-error" class="hidden mt-3 text-sm text-red-600 bg-red-50 p-3 rounded-lg"></div>
+            <div id="form-success" class="hidden mt-3 text-sm text-green-700 bg-green-50 p-3 rounded-lg"></div>
+        </section>
+
+        <!-- QR Code List -->
+        <section class="bg-white rounded-xl shadow-sm border border-gray-200">
+            <div class="p-6 border-b border-gray-100">
+                <h2 class="text-lg font-semibold text-gray-800">
+                    <i class="fa-solid fa-list text-indigo-500 mr-2"></i>Your QR Codes
+                </h2>
+            </div>
+            <div id="qr-list" class="divide-y divide-gray-100">
+                <div class="p-8 text-center text-gray-400">
+                    <i class="fa-solid fa-spinner fa-spin text-2xl"></i>
+                    <p class="mt-2 text-sm">Loading QR codes...</p>
+                </div>
+            </div>
+        </section>
+    </main>
+
+    <!-- Edit Modal -->
+    <div id="edit-modal" class="hidden fixed inset-0 z-50 flex items-center justify-center bg-black/40">
+        <div class="bg-white rounded-xl shadow-xl w-full max-w-md mx-4 p-6 fade-in">
+            <h3 class="text-lg font-semibold text-gray-800 mb-4">
+                <i class="fa-solid fa-pen text-indigo-500 mr-2"></i>Edit Target URL
+            </h3>
+            <p class="text-sm text-gray-500 mb-1">Slug: <span id="edit-slug-label" class="font-mono font-medium text-gray-800"></span></p>
+            <input id="edit-url-input" type="url" placeholder="https://new-destination.com"
+                class="w-full mt-2 border border-gray-300 rounded-lg px-4 py-2.5 text-sm focus:ring-2 focus:ring-indigo-500 focus:border-transparent outline-none">
+            <div id="edit-error" class="hidden mt-3 text-sm text-red-600 bg-red-50 p-3 rounded-lg"></div>
+            <div class="flex gap-3 mt-5 justify-end">
+                <button onclick="closeEditModal()"
+                    class="px-4 py-2 text-sm text-gray-600 hover:text-gray-800 border rounded-lg">Cancel</button>
+                <button id="edit-save-btn"
+                    class="bg-indigo-600 hover:bg-indigo-700 text-white font-medium px-5 py-2 rounded-lg text-sm transition-colors">
+                    Save Changes
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- QR Image Modal -->
+    <div id="qr-modal" class="hidden fixed inset-0 z-50 flex items-center justify-center bg-black/40">
+        <div class="bg-white rounded-xl shadow-xl w-full max-w-sm mx-4 p-6 text-center fade-in">
+            <h3 class="text-lg font-semibold text-gray-800 mb-4">QR Code Preview</h3>
+            <img id="qr-modal-img" src="" alt="QR Code" class="mx-auto border rounded-lg">
+            <p id="qr-modal-url" class="mt-3 text-sm text-gray-500 font-mono break-all"></p>
+            <div class="flex gap-3 mt-5 justify-center">
+                <a id="qr-download-link" download="qrcode.png"
+                    class="bg-indigo-600 hover:bg-indigo-700 text-white font-medium px-5 py-2 rounded-lg text-sm transition-colors">
+                    <i class="fa-solid fa-download mr-1"></i> Download
+                </a>
+                <button onclick="closeQrModal()"
+                    class="px-4 py-2 text-sm text-gray-600 hover:text-gray-800 border rounded-lg">Close</button>
+            </div>
+        </div>
+    </div>
+
+<script>
+const API = '/api/qr';
+
+// --- Fetch & render ---
+async function loadQRCodes() {
+    const res = await fetch(API);
+    const data = await res.json();
+    const list = document.getElementById('qr-list');
+    const badge = document.getElementById('stats-badge');
+    const qrs = data.qr_codes;
+    const totalClicks = qrs.reduce((s, q) => s + q.clicks, 0);
+    badge.textContent = `${qrs.length} codes · ${totalClicks} clicks`;
+
+    if (qrs.length === 0) {
+        list.innerHTML = `
+            <div class="p-12 text-center text-gray-400">
+                <i class="fa-solid fa-qrcode text-4xl mb-3"></i>
+                <p class="text-sm">No QR codes yet. Create one above!</p>
+            </div>`;
+        return;
+    }
+    list.innerHTML = qrs.map(q => `
+        <div class="p-4 sm:p-5 flex flex-col sm:flex-row sm:items-center gap-3 hover:bg-gray-50 transition-colors fade-in">
+            <div class="flex-1 min-w-0">
+                <div class="flex items-center gap-2 mb-1">
+                    <span class="font-mono font-semibold text-indigo-700 text-sm">/${q.slug}</span>
+                    <span class="bg-green-100 text-green-700 text-xs px-2 py-0.5 rounded-full">${q.clicks} clicks</span>
+                </div>
+                <p class="text-sm text-gray-500 truncate" title="${q.target_url}">
+                    <i class="fa-solid fa-arrow-right text-xs mr-1"></i>${q.target_url}
+                </p>
+                <p class="text-xs text-gray-400 mt-1">
+                    Short URL: <a href="${q.short_url}" target="_blank" class="text-indigo-500 hover:underline">${q.short_url}</a>
+                </p>
+            </div>
+            <div class="flex gap-2 shrink-0">
+                <button onclick="showQrImage('${q.slug}', '${q.short_url}')"
+                    class="p-2 text-gray-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors" title="View QR">
+                    <i class="fa-solid fa-qrcode"></i>
+                </button>
+                <button onclick="openEditModal('${q.slug}', '${q.target_url.replace(/'/g, "\\'")}')"
+                    class="p-2 text-gray-400 hover:text-amber-600 hover:bg-amber-50 rounded-lg transition-colors" title="Edit">
+                    <i class="fa-solid fa-pen-to-square"></i>
+                </button>
+                <button onclick="deleteQR('${q.slug}')"
+                    class="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors" title="Delete">
+                    <i class="fa-solid fa-trash-can"></i>
+                </button>
+            </div>
+        </div>
+    `).join('');
+}
+
+// --- Create ---
+document.getElementById('create-form').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const errEl = document.getElementById('form-error');
+    const okEl = document.getElementById('form-success');
+    errEl.classList.add('hidden');
+    okEl.classList.add('hidden');
+
+    const slug = document.getElementById('slug-input').value.trim();
+    const target_url = document.getElementById('url-input').value.trim();
+
+    const res = await fetch(API, {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({slug, target_url})
+    });
+    if (!res.ok) {
+        const err = await res.json();
+        errEl.textContent = err.detail || JSON.stringify(err);
+        errEl.classList.remove('hidden');
+        return;
+    }
+    document.getElementById('slug-input').value = '';
+    document.getElementById('url-input').value = '';
+    okEl.textContent = `QR code "/${slug}" created successfully!`;
+    okEl.classList.remove('hidden');
+    setTimeout(() => okEl.classList.add('hidden'), 3000);
+    loadQRCodes();
+});
+
+// --- Edit modal ---
+let editingSlug = '';
+function openEditModal(slug, currentUrl) {
+    editingSlug = slug;
+    document.getElementById('edit-slug-label').textContent = slug;
+    document.getElementById('edit-url-input').value = currentUrl;
+    document.getElementById('edit-error').classList.add('hidden');
+    document.getElementById('edit-modal').classList.remove('hidden');
+}
+function closeEditModal() {
+    document.getElementById('edit-modal').classList.add('hidden');
+}
+document.getElementById('edit-save-btn').addEventListener('click', async () => {
+    const target_url = document.getElementById('edit-url-input').value.trim();
+    const errEl = document.getElementById('edit-error');
+    errEl.classList.add('hidden');
+    const res = await fetch(`${API}/${editingSlug}`, {
+        method: 'PUT',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({target_url})
+    });
+    if (!res.ok) {
+        const err = await res.json();
+        errEl.textContent = err.detail || JSON.stringify(err);
+        errEl.classList.remove('hidden');
+        return;
+    }
+    closeEditModal();
+    loadQRCodes();
+});
+
+// --- Delete ---
+async function deleteQR(slug) {
+    if (!confirm(`Delete /${slug}? This cannot be undone.`)) return;
+    await fetch(`${API}/${slug}`, {method: 'DELETE'});
+    loadQRCodes();
+}
+
+// --- QR image modal ---
+function showQrImage(slug, shortUrl) {
+    const imgSrc = `${API}/${slug}/qrcode.png`;
+    document.getElementById('qr-modal-img').src = imgSrc;
+    document.getElementById('qr-modal-url').textContent = shortUrl;
+    document.getElementById('qr-download-link').href = imgSrc;
+    document.getElementById('qr-modal').classList.remove('hidden');
+}
+function closeQrModal() {
+    document.getElementById('qr-modal').classList.add('hidden');
+}
+
+// Close modals on backdrop click
+document.getElementById('edit-modal').addEventListener('click', (e) => {
+    if (e.target === e.currentTarget) closeEditModal();
+});
+document.getElementById('qr-modal').addEventListener('click', (e) => {
+    if (e.target === e.currentTarget) closeQrModal();
+});
+
+// Init
+loadQRCodes();
+</script>
+</body>
+</html>
